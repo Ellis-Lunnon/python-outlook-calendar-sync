@@ -21,20 +21,29 @@ def get_gcal_api():
     # created automatically when the authorization flow completes for the first
     # time.
     config_dir = Path.home() / ".config" / "outlook-calendar-sync"
-    config_file = config_dir / "token.json"
-    if config_file.exists():
-        creds = Credentials.from_authorized_user_file(config_file, SCOPES)
+    token_file = config_dir / "token.json"
+    credentials_file = config_dir / "credentials.json"
+
+    if token_file.exists():
+        log.debug("")
+        creds = Credentials.from_authorized_user_file(token_file, SCOPES)
 
     # If there are no (valid) credentials available, let the user log in.
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
+        elif not credentials_file.exists():
+            exc = FileNotFoundError("Failed to locate a valid token.json or credentials.json file in %s" % config_dir.absolute())
+            log.exception(exc)
+            raise exc
         else:
-            flow = InstalledAppFlow.from_client_secrets_file("credentials.json", SCOPES)
+            log.info("Could not authenticate with token.json, using credentials.json instead")
+            flow = InstalledAppFlow.from_client_secrets_file(credentials_file, SCOPES)
             creds = flow.run_local_server(port=0)
         # Save the credentials for the next run
         with open(config_dir / "token.json", "w") as token:
             token.write(creds.to_json())
+        log.debug("Completed authentication, storing token in %s", token_file)
 
     return build("calendar", "v3", credentials=creds)
 
